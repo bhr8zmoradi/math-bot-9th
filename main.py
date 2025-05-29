@@ -1,42 +1,59 @@
-# main.py
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 import os
 import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
-# تنظیم لاگ‌گیری
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# تنظیمات لاگ
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv('BOT_TOKEN')
+# توکن ربات (از متغیر محیطی یا به صورت مستقیم)
+TOKEN = os.getenv('BOT_TOKEN') or "توکن_ربات_شما"
 
-# --- ساختار داده‌های آموزشی ---
+# ساختار داده‌های آموزشی
 CHAPTERS = {
     1: {
-        'title': 'مجموعه‌ها',
+        'title': 'مجموعه‌ها و احتمال',
         'lessons': {
-            1: {'title': 'مفهوم مجموعه', 'content': 'تعریف مجموعه...', 'video': 'https://example.com/video1'},
-            2: {'title': 'انواع مجموعه', 'content': 'متناهی/نامتناهی...', 'video': 'https://example.com/video2'}
+            1: {
+                'title': 'مفهوم مجموعه',
+                'content': '📖 مجموعه به گروهی از اشیا گفته می‌شود که ویژگی مشترکی دارند.\n\nمثال:\n• مجموعه اعداد طبیعی کمتر از ۵: {1,2,3,4}',
+                'video': 'https://example.com/set-theory'
+            },
+            2: {
+                'title': 'انواع مجموعه',
+                'content': '📖 انواع مجموعه:\n1. مجموعه متناهی (مثل {1,2,3})\n2. مجموعه نامتناهی (مثل اعداد طبیعی)\n3. مجموعه تهی ({} یا ∅)',
+                'video': 'https://example.com/set-types'
+            }
         },
-        'questions': [
-            {'text': 'کدام گزینه مجموعه است؟', 'options': ['الف) {1,2,3}', 'ب) 1,2,3'], 'answer': 0}
-        ]
+        'exercises': {
+            1: {
+                'question': 'کدام گزینه یک مجموعه است؟',
+                'options': ['الف) {1,2,3}', 'ب) 1,2,3'],
+                'answer': 0
+            }
+        }
     }
 }
 
-# --- مدیریت منوها ---
+# --- توابع مدیریت منو ---
 def start(update: Update, context: CallbackContext):
+    """شروع ربات و نمایش منوی اصلی"""
     keyboard = [
         [InlineKeyboardButton("📖 درسنامه", callback_data="menu_lessons_1")],
         [InlineKeyboardButton("✏️ تمرین", callback_data="menu_practice_1")],
         [InlineKeyboardButton("📝 آزمون", callback_data="menu_exam_1")]
     ]
     update.message.reply_text(
-        "فصل 1: مجموعه‌ها\nلطفا بخش مورد نظر را انتخاب کنید:",
+        "📚 ربات آموزش ریاضی نهم\n\nفصل ۱: مجموعه‌ها و احتمال\nلطفاً بخش مورد نظر را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 def handle_menu(update: Update, context: CallbackContext):
+    """مدیریت کلیک روی منوی اصلی"""
     query = update.callback_query
     data = query.data.split('_')
     
@@ -48,28 +65,72 @@ def handle_menu(update: Update, context: CallbackContext):
         start_exam(update, int(data[2]))
 
 def show_lessons_menu(update: Update, chapter: int):
+    """نمایش لیست درسنامه‌های یک فصل"""
     lessons = CHAPTERS[chapter]['lessons']
     keyboard = [
-        [InlineKeyboardButton(lessons[i]['title'], callback_data=f"lesson_{chapter}_{i}")] 
+        [InlineKeyboardButton(lessons[i]['title'], callback_data=f"lesson_{chapter}_{i}")]
         for i in lessons
     ]
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
     
     update.callback_query.edit_message_text(
-        f"درسنامه‌های فصل {chapter}:",
+        f"📚 درسنامه‌های فصل {chapter}:\n\nلطفاً درس مورد نظر را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# --- اجرای ربات ---
+def show_lesson_content(update: Update, context: CallbackContext):
+    """نمایش محتوای یک درس خاص"""
+    query = update.callback_query
+    data = query.data.split('_')
+    chapter = int(data[1])
+    lesson = int(data[2])
+    
+    lesson_data = CHAPTERS[chapter]['lessons'][lesson]
+    
+    keyboard = [
+        [InlineKeyboardButton("🎥 تماشای ویدیو", url=lesson_data['video'])],
+        [InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_lessons_{chapter}")]
+    ]
+    
+    query.edit_message_text(
+        f"📖 {lesson_data['title']}\n\n{lesson_data['content']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+def start_practice(update: Update, chapter: int):
+    """شروع بخش تمرینات"""
+    exercise = CHAPTERS[chapter]['exercises'][1]  # اولین تمرین
+    keyboard = [
+        [InlineKeyboardButton(option, callback_data=f"ex_answer_{chapter}_1_{i}")]
+        for i, option in enumerate(exercise['options'])
+    ]
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
+    
+    update.callback_query.edit_message_text(
+        f"✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+def back_to_main(update: Update, context: CallbackContext):
+    """بازگشت به منوی اصلی"""
+    start(update, context)
+
+# --- تنظیمات اصلی ربات ---
 def main():
     updater = Updater(TOKEN)
     dp = updater.dispatcher
     
+    # دستورات
     dp.add_handler(CommandHandler("start", start))
+    
+    # مدیریت callback‌ها
     dp.add_handler(CallbackQueryHandler(handle_menu, pattern="^menu_"))
-    dp.add_handler(CallbackQueryHandler(show_lessons_menu, pattern="^lesson_"))
+    dp.add_handler(CallbackQueryHandler(show_lesson_content, pattern="^lesson_"))
+    dp.add_handler(CallbackQueryHandler(start_practice, pattern="^menu_practice_"))
+    dp.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main"))
     
     updater.start_polling()
+    logger.info("ربات شروع به کار کرد...")
     updater.idle()
 
 if __name__ == "__main__":
